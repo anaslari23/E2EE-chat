@@ -37,4 +37,31 @@ class ApiService {
       throw Exception('Failed to login: ${response.body}');
     }
   }
+
+  Future<void> uploadPreKeyBundle(int userId, Map<String, dynamic> bundle) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/keys/upload'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'user_id': userId,
+        'bundle': bundle,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to upload bundle: ${response.body}');
+    }
+  }
+
+  Future<Map<String, dynamic>> getPreKeyBundle(int userId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/keys/$userId'),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch bundle: ${response.body}');
+    }
+  }
 }

@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api import auth, websocket
+from app.api import auth, websocket, keys
 from app.db.session import init_db
 from app.core.config import settings
 
@@ -12,6 +12,7 @@ async def on_startup():
 
 
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
+app.include_router(keys.router, prefix=f"{settings.API_V1_STR}/keys", tags=["keys"])
 app.include_router(websocket.router, tags=["websocket"])
 
 
