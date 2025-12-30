@@ -35,6 +35,10 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                 ref.read(authStateProvider.notifier).logout();
               } else if (value == 'security') {
                 context.push('/security-settings');
+              } else if (value == 'storage') {
+                context.push('/storage-settings');
+              } else if (value == 'appearance') {
+                context.push('/appearance-settings');
               }
             },
             itemBuilder: (context) => [
@@ -45,6 +49,14 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
               const PopupMenuItem(
                 value: 'security',
                 child: Text('Privacy & Security'),
+              ),
+              const PopupMenuItem(
+                value: 'storage',
+                child: Text('Data & Storage'),
+              ),
+              const PopupMenuItem(
+                value: 'appearance',
+                child: Text('Appearance'),
               ),
               const PopupMenuItem(
                 value: 'logout',

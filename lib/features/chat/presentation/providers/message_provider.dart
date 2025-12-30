@@ -12,6 +12,8 @@ import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:math';
 
+import 'dart:io';
+
 import 'dart:async';
 
 class MessageNotifier extends StateNotifier<List<ChatMessage>> {
@@ -417,6 +419,22 @@ class MessageNotifier extends StateNotifier<List<ChatMessage>> {
       final api = ref.read(apiServiceProvider);
       await api.deleteMessage(messageId, forEveryone: forEveryone);
       
+      // Securely delete local attachments
+      final msg = state.firstWhere((m) => m.id == messageId, orElse: () => ChatMessage(content: '', isMe: false, timestamp: DateTime.now()));
+      if (msg.attachments.isNotEmpty) {
+        for (final attachment in msg.attachments) {
+          if (attachment.localPath != null) {
+            final file = File(attachment.localPath!);
+            if (await file.exists()) {
+              // Overwrite with zeros before deleting
+              final length = await file.length();
+              await file.writeAsBytes(List.filled(length, 0));
+              await file.delete();
+            }
+          }
+        }
+      }
+
       if (forEveryone) {
         state = [
           for (final msg in state)
@@ -428,6 +446,7 @@ class MessageNotifier extends StateNotifier<List<ChatMessage>> {
                 timestamp: msg.timestamp,
                 isDeleted: true,
                 deletedForAll: true,
+                groupId: msg.groupId, // Preserve group ID
               )
             else
               msg
@@ -540,9 +559,22 @@ class MessageNotifier extends StateNotifier<List<ChatMessage>> {
       if (userId == null) return;
 
       final api = ref.read(apiServiceProvider);
-      final jsonList = await api.getPendingMessages(userId); // Simplified
-      // In real app, we'd have a getHistory(userId, contactId)
-      state = jsonList.map((j) => ChatMessage.fromJson(j, userId)).toList();
+      // Fetch recent messages for a newly linked device
+      // In a real app this would be more complex (paging/decryption)
+      // For MVP we just sync pending messages which acts as history for new devices if queued
+      final jsonList = await api.getPendingMessages(userId); 
+      
+      final newMessages = jsonList.map((j) => ChatMessage.fromJson(j, userId)).toList();
+      
+      // Merge with existing state avoiding duplicates
+      final existingIds = state.map((m) => m.id).toSet();
+      final uniqueNewMessages = newMessages.where((m) => m.id != null && !existingIds.contains(m.id)).toList();
+
+      if (uniqueNewMessages.isNotEmpty) {
+        state = [...state, ...uniqueNewMessages];
+        // Sort by timestamp
+        state.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      }
     } catch (e) {
       print('Failed to fetch history: $e');
     }
