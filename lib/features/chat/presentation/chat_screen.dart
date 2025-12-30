@@ -26,6 +26,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _controller.addListener(() {
       setState(() => _isTextEmpty = _controller.text.trim().isEmpty);
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final contactId = int.tryParse(widget.id);
+      if (contactId != null) {
+        ref.read(messagesProvider.notifier).fetchHistory(contactId);
+      }
+    });
   }
 
   void _sendMessage() {

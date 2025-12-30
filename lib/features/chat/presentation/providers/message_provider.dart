@@ -143,10 +143,33 @@ class MessageNotifier extends StateNotifier<List<ChatMessage>> {
   void addMessage(ChatMessage message) {
     state = [...state, message];
   }
+
+  Future<void> fetchHistory(int contactId) async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final userId = ref.read(authProvider) ?? 1;
+      final jsonList = await api.getPendingMessages(userId); // Simplified
+      // In real app, we'd have a getHistory(userId, contactId)
+      state = jsonList.map((j) => ChatMessage.fromJson(j, userId)).toList();
+    } catch (e) {
+      print('Failed to fetch history: $e');
+    }
+  }
 }
 
 final messagesProvider = StateNotifierProvider<MessageNotifier, List<ChatMessage>>((ref) {
   return MessageNotifier(ref);
+});
+
+final conversationsProvider = FutureProvider<List<dynamic>>((ref) async {
+  final api = ref.read(apiServiceProvider);
+  final userId = ref.read(authProvider) ?? 1;
+  return await api.getConversations(userId);
+});
+
+final usersProvider = FutureProvider<List<dynamic>>((ref) async {
+  final api = ref.read(apiServiceProvider);
+  return await api.getUsers();
 });
 
 final starredMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {

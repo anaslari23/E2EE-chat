@@ -1,8 +1,17 @@
 from typing import Dict
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
+    Depends,
+    Query,
+    HTTPException,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 from app.db.session import get_session
-from app.models.models import Message
+from app.models.models import Message, Device
+from app.core.security import verify_token
 import json
 
 router = APIRouter()
@@ -40,8 +49,16 @@ async def websocket_endpoint(
     websocket: WebSocket,
     user_id: int,
     device_id: int,
+    token: str = Query(...),
     db: AsyncSession = Depends(get_session),
 ):
+    # Security: Authenticate the connection
+    authed_user_id = verify_token(token)
+    if not authed_user_id or authed_user_id != user_id:
+        await websocket.accept()
+        await websocket.close(code=4003)  # Forbidden
+        return
+
     await manager.shadow_connect(user_id, device_id, websocket)
     try:
         while True:
@@ -73,7 +90,6 @@ async def websocket_endpoint(
                         recipient_device_id=d_id,
                         ciphertext=ciphertext,
                         message_type=message_type,
-                        # In real app, we'd add device_id to Message table
                     )
                     db.add(db_message)
                     await db.commit()
@@ -94,10 +110,10 @@ async def websocket_endpoint(
                         db_message.status = "delivered"
                         db.add(db_message)
                         await db.commit()
+
                 # Send acknowledgment back to sender's CURRENT device
                 ack_data = {
                     "type": "ack",
-                    "id": db_message.id,
                     "status": "sent_to_relay",
                 }
                 await manager.send_personal_message(

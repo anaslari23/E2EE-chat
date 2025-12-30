@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Union
+from typing import Any, Union, Optional
 from jose import jwt
 from passlib.context import CryptContext
 from app.core.config import settings
@@ -29,3 +29,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
+
+
+def verify_token(token: str) -> Optional[int]:
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        user_id = payload.get("sub")
+        return int(user_id) if user_id else None
+    except Exception:
+        return None

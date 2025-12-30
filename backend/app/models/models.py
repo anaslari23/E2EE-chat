@@ -107,3 +107,11 @@ class ChatSettings(SQLModel, table=True):
     mute_until: Optional[datetime] = Field(default=None)
     category: str = Field(default="personal")  # personal, unread, etc.
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class OneTimePreKey(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    device_id: int = Field(foreign_key="device.id")
+    key_id: int  # Client-side 24-bit integer
+    public_key: str  # Base64 encoded Curve25519 public key
+    created_at: datetime = Field(default_factory=datetime.utcnow)

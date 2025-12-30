@@ -93,7 +93,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     
     // 3. Connect WebSocket
     final ws = ref.read(webSocketServiceProvider);
-    ws.connect(user.id, deviceId);
+    ws.connect(user.id, deviceId, user.accessToken);
     
     // Update global auth state
     ref.read(authProvider.notifier).state = user.id;

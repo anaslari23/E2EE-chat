@@ -8,9 +8,9 @@ class WebSocketService {
 
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
 
-  void connect(int userId, int deviceId) {
+  void connect(int userId, int deviceId, String token) {
     _channel = WebSocketChannel.connect(
-      Uri.parse('ws://localhost:8000/ws/$userId/$deviceId'),
+      Uri.parse('ws://localhost:8000/api/v1/websocket/ws/$userId/$deviceId?token=$token'),
     );
 
     _channel!.stream.listen((message) {
