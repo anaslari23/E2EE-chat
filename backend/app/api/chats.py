@@ -1,18 +1,22 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from pydantic import BaseModel
-from sqlalchemy import func, desc, or_
+from sqlalchemy import func, desc, or_, case
 from app.db.session import get_session
-from app.models.models import ChatSettings, Message, User
+from app.models.models import ChatSettings, Message, User, Group, GroupMember
 
 router = APIRouter()
 
 
 class MuteRequest(BaseModel):
     duration_minutes: Optional[int] = None
+
+
+class ContactSyncRequest(BaseModel):
+    phone_hashes: List[str]
 
 
 @router.post("/{chat_id}/pin")
@@ -104,11 +108,12 @@ async def get_conversations(
     msg_sender = Message.sender_id == user_id
     msg_recipient = Message.recipient_id == user_id
 
-    case_stmt = func.case((msg_sender, Message.recipient_id), else_=Message.sender_id)
+    case_stmt = case([(msg_sender, Message.recipient_id)], else_=Message.sender_id)
 
     subquery = (
         select(func.max(Message.id).label("max_id"))
         .where(or_(msg_sender, msg_recipient))
+        .where(Message.group_id.is_(None))
         .group_by(case_stmt)
     )
 
@@ -128,15 +133,67 @@ async def get_conversations(
 
         conversations.append(
             {
+                "id": f"u{target_id}",
+                "type": "personal",
                 "contact_id": target_id,
-                "contact_name": contact.username if contact else f"U{target_id}",
+                "contact_name": (contact.username if contact else f"U{target_id}"),
                 "last_message": msg.ciphertext,
                 "timestamp": msg.timestamp.isoformat(),
                 "unread_count": 0,
             }
         )
 
+    # Add Group Conversations
+    group_member_res = await db.execute(
+        select(Group).join(GroupMember).where(GroupMember.user_id == user_id)
+    )
+    groups = group_member_res.scalars().all()
+
+    for g in groups:
+        # Get last message for group
+        last_msg_res = await db.execute(
+            select(Message)
+            .where(Message.group_id == g.id)
+            .order_by(desc(Message.timestamp))
+            .limit(1)
+        )
+        last_msg = last_msg_res.scalar_one_or_none()
+
+        conversations.append(
+            {
+                "id": f"g{g.id}",
+                "type": "group",
+                "group_id": g.id,
+                "contact_name": g.name,
+                "last_message": (last_msg.ciphertext if last_msg else "Room created"),
+                "timestamp": (
+                    last_msg.timestamp.isoformat()
+                    if last_msg
+                    else g.created_at.isoformat()
+                ),
+                "unread_count": 0,
+            }
+        )
+
+    # Final sort
+    conversations.sort(key=lambda x: x["timestamp"], reverse=True)
+
     return conversations
+
+
+@router.post("/sync-contacts")
+async def sync_contacts(
+    sync_in: ContactSyncRequest, db: AsyncSession = Depends(get_session)
+):
+    # Find users whose phone_hash is in the uploaded list
+    result = await db.execute(
+        select(User).where(User.phone_hash.in_(sync_in.phone_hashes))
+    )
+    users = result.scalars().all()
+
+    return [
+        {"id": u.id, "username": u.username, "phone": u.phone_number} for u in users
+    ]
 
 
 @router.get("/users")

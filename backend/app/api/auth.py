@@ -1,5 +1,6 @@
 import random
 import logging
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
@@ -10,6 +11,8 @@ from app.db.session import get_session
 from app.models.models import User, OTP
 from app.core.security import create_access_token
 from app.core.limiter import limiter
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -34,9 +37,11 @@ class UserResponse(BaseModel):
 
 
 @router.post("/request-otp")
-@limiter.limit("5/minute")
+# @limiter.limit("5/minute")
 async def request_otp(
-    request: Request, otp_in: OTPRequest, db: AsyncSession = Depends(get_session)
+    request: Request,
+    otp_in: OTPRequest,
+    db: AsyncSession = Depends(get_session),
 ):
     # Generate a random 6-digit OTP
     code = f"{random.randint(100000, 999999)}"
@@ -57,23 +62,29 @@ async def request_otp(
 @router.post("/verify-otp", response_model=UserResponse)
 @limiter.limit("10/minute")
 async def verify_otp(
-    request: Request, otp_in: OTPVerify, db: AsyncSession = Depends(get_session)
+    request: Request,
+    otp_in: OTPVerify,
+    db: AsyncSession = Depends(get_session),
 ):
     # Check if OTP exists and is valid
+    # Development Mode: Accept '000000' as a magic code
+    is_magic_code = settings.DEVELOPMENT_MODE and otp_in.code == "000000"
+
     result = await db.execute(
         select(OTP)
         .where(
             OTP.phone_number == otp_in.phone_number,
-            OTP.code == otp_in.code,
+            OTP.code == otp_in.code if not is_magic_code else True,
             OTP.expires_at > datetime.utcnow(),
         )
         .order_by(OTP.created_at.desc())
     )
     otp_record = result.scalars().first()
 
-    if not otp_record:
+    if not otp_record and not is_magic_code:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OTP"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP",
         )
 
     # Check if user exists, if not create them (Auto-registration)
@@ -83,17 +94,25 @@ async def verify_otp(
     user = result.scalar_one_or_none()
 
     if not user:
+        # Generate phone hash for discovery
+        phone_hash = hashlib.sha256(otp_in.phone_number.encode()).hexdigest()
         user = User(
             phone_number=otp_in.phone_number,
+            phone_hash=phone_hash,
             username=f"User_{otp_in.phone_number[-4:]}",
         )
         db.add(user)
         await db.commit()
         await db.refresh(user)
+    elif not user.phone_hash:
+        user.phone_hash = hashlib.sha256(user.phone_number.encode()).hexdigest()
+        db.add(user)
+        await db.commit()
 
     # Delete the OTP after successful verification
-    await db.delete(otp_record)
-    await db.commit()
+    if otp_record:
+        await db.delete(otp_record)
+        await db.commit()
 
     access_token = create_access_token(subject=user.id)
 
@@ -131,7 +150,8 @@ async def update_profile(
     )
     if exists_res.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken",
         )
 
     user.username = profile_in.username

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../domain/user.dart';
 import '../../../../core/providers.dart';
 
@@ -165,6 +166,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
     // 4. Persist Session
     final storage = ref.read(secureStorageProvider);
     await storage.write(key: 'auth_user', value: jsonEncode(user.toJson()));
+
+    // 5. Register Push Token
+    try {
+      final messaging = FirebaseMessaging.instance;
+      NotificationSettings settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        String? token = await messaging.getToken();
+        if (token != null) {
+          await api.registerPushToken(user.id, deviceId, token);
+        }
+      }
+    } catch (e) {
+      print("Push token registration failed: $e");
+    }
 
     // Update global auth state
     ref.read(authProvider.notifier).state = user.id;

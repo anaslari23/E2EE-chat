@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 
-class MySignalProtocolStore extends SignalProtocolStore {
+class MySignalProtocolStore extends SignalProtocolStore implements SenderKeyStore {
   final Map<int, PreKeyRecord> _preKeys = {};
   final Map<int, SignedPreKeyRecord> _signedPreKeys = {};
   final Map<SignalProtocolAddress, SessionRecord> _sessions = {};
@@ -113,5 +113,19 @@ class MySignalProtocolStore extends SignalProtocolStore {
   @override
   Future<IdentityKey?> getIdentity(SignalProtocolAddress address) async {
     return _identityKeys[address];
+  }
+
+  // SenderKeyStore Implementation
+  final Map<SenderKeyName, SenderKeyRecord> _senderKeys = {};
+
+  @override
+  Future<void> storeSenderKey(
+      SenderKeyName senderKeyName, SenderKeyRecord record) async {
+    _senderKeys[senderKeyName] = record;
+  }
+
+  @override
+  Future<SenderKeyRecord> loadSenderKey(SenderKeyName senderKeyName) async {
+    return _senderKeys[senderKeyName] ?? SenderKeyRecord();
   }
 }

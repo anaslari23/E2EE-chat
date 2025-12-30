@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:record/record.dart';
 import 'package:file_picker/file_picker.dart';
@@ -60,6 +62,7 @@ class MediaNotifier extends StateNotifier<bool> {
   ) async {
     final messageNotifier = ref.read(messagesProvider.notifier);
     final api = ref.read(apiServiceProvider);
+    final encryption = ref.read(encryptionServiceProvider);
 
     // 1. Create temporary message
     final tempId = DateTime.now().millisecondsSinceEpoch;
@@ -74,17 +77,43 @@ class MediaNotifier extends StateNotifier<bool> {
     messageNotifier.addMessage(tempMessage);
 
     try {
-      // 2. Upload media (In real app, encrypt bytes first)
+      // 2. Encrypt media on-device
+      final encrypted = await encryption.encryptMedia(Uint8List.fromList(bytes));
+
+      // 3. Upload encrypted blob
       final uploadResult = await api.uploadMedia(
         tempId, 
         type.name, 
-        bytes, 
+        encrypted.bytes, 
         fileName
       );
 
-      // 3. Update message status
-      // In a real app, we'd send the message via WebSocket with attachment IDs
-      print('Media uploaded: ${uploadResult['attachment_id']}');
+      final attachmentId = uploadResult['attachment_id'];
+
+      // 4. Construct E2EE media metadata
+      final mediaMetadata = {
+        'type': 'media',
+        'attachment_id': attachmentId,
+        'media_key': base64Encode(encrypted.key),
+        'media_nonce': base64Encode(encrypted.nonce),
+        'file_name': fileName,
+        'file_type': type.name,
+        'file_size': bytes.length,
+      };
+
+      // 5. Send via standard messaging pipeline (encrypted)
+      final plaintext = jsonEncode(mediaMetadata);
+      if (chatId.startsWith('g')) {
+        final groupId = int.parse(chatId.substring(1));
+        await messageNotifier.sendGroupMessage(groupId, plaintext);
+      } else {
+        final recipientId = int.tryParse(chatId);
+        if (recipientId != null) {
+          await messageNotifier.sendMessage(recipientId, plaintext);
+        }
+      }
+      
+      print('Media message sent with attachment $attachmentId');
     } catch (e) {
       print('Failed to send media: $e');
     }

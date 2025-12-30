@@ -18,22 +18,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String _phoneFullNumber = '';
 
   void _handleInitiateOtp() async {
+    debugPrint('Login: Starting OTP initiation for $_phoneFullNumber');
     if (_formKey.currentState?.validate() ?? false) {
+      debugPrint('Login: Form validated, calling notifier...');
       final notifier = ref.read(authStateProvider.notifier);
       await notifier.initiate_otp_with_prefix(
             _phoneFullNumber,
           );
       
-      if (!mounted) return;
+      if (!mounted) {
+        debugPrint('Login: Widget not mounted after await (expected if router moved us)');
+        return;
+      }
 
       final authState = ref.read(authStateProvider);
+      debugPrint('Login: Post-auth status: ${authState.status}');
+      
+      // Navigation is now handled by the router's redirect logic,
+      // but we add this fail-safe for immediate response.
       if (authState.status == AuthStatus.otpSent) {
-        context.push('/verify-otp');
+        debugPrint('Login: Navigating to verify-otp (Manual fail-safe)');
+        context.go('/verify-otp');
       } else if (authState.status == AuthStatus.error) {
+        debugPrint('Login: Error state: ${authState.errorMessage}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(authState.errorMessage ?? 'Failed to send OTP')),
         );
       }
+    } else {
+      debugPrint('Login: Form validation failed');
     }
   }
 
@@ -88,7 +101,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   },
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (v) => v == null ? 'Invalid phone number' : null,
+                  onSubmitted: (_) => _handleInitiateOtp(),
+                  validator: (v) {
+                    if (v == null || v.number.isEmpty) {
+                      return 'Enter phone number';
+                    }
+                    try {
+                      if (!v.isValidNumber()) {
+                        return 'Invalid phone number length';
+                      }
+                    } catch (_) {}
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 32),
                 ElevatedButton(

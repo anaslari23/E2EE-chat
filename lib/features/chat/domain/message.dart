@@ -20,8 +20,10 @@ class ChatMessage {
   final bool deletedForAll;
   final List<MessageReaction> reactions;
   final List<ChatAttachment> attachments;
-  final String messageType; // text, image, video, voice, document
+  final String messageType;
   final bool isStarred;
+  final int? groupId;
+  final DateTime? expiresAt;
 
   ChatMessage({
     this.id,
@@ -38,6 +40,8 @@ class ChatMessage {
     this.attachments = const [],
     this.messageType = 'text',
     this.isStarred = false,
+    this.groupId,
+    this.expiresAt,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json, int currentUserId) {
@@ -46,6 +50,7 @@ class ChatMessage {
       content: json['ciphertext'] ?? '',
       isMe: json['sender_id'] == currentUserId,
       timestamp: DateTime.parse(json['timestamp']),
+      expiresAt: json['expires_at'] != null ? DateTime.parse(json['expires_at']) : null,
       status: json['status'] ?? 'delivered',
       parentId: json['parent_id'],
       isEdited: json['is_edited'] ?? false,
@@ -62,6 +67,7 @@ class ChatMessage {
           .toList(),
       messageType: json['message_type'] ?? 'text',
       isStarred: json['is_starred'] ?? false,
+      groupId: json['group_id'],
     );
   }
 }

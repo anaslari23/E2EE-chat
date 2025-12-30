@@ -63,6 +63,18 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getPreKeyBundle(int userId, int deviceId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/keys/$userId/$deviceId'),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch prekey bundle: ${response.body}');
+    }
+  }
+
   Future<List<dynamic>> getPreKeyBundles(int userId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/keys/$userId'),
@@ -247,6 +259,124 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       throw Exception('Failed to fetch users: ${response.body}');
+    }
+  }
+
+  Future<void> registerPushToken(
+      int userId, int deviceId, String token) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/keys/push-token'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'user_id': userId,
+        'device_id': deviceId,
+        'push_token': token,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to register push token: ${response.body}');
+    }
+  }
+
+  Future<List<dynamic>> syncContacts(List<String> phoneHashes) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/chats/sync-contacts'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone_hashes': phoneHashes}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to sync contacts: ${response.body}');
+    }
+  }
+
+  // Group Management
+  Future<Map<String, dynamic>> createGroup(
+      String name, List<int> memberIds, int creatorId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/groups/?creator_id=$creatorId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'name': name,
+        'members': memberIds,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to create group: ${response.body}');
+    }
+  }
+
+  Future<List<dynamic>> getGroups(int userId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/groups/?user_id=$userId'),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch groups: ${response.body}');
+    }
+  }
+
+  Future<List<dynamic>> getGroupMembers(int groupId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/groups/$groupId/members'),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch group members: ${response.body}');
+    }
+  }
+
+
+  // Multi-Device Linking
+  Future<String> requestDeviceLinking(String ephemeralPublicKey) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/devices/linking/request'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'ephemeral_public_key': ephemeralPublicKey,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body)['linking_code'];
+    } else {
+      throw Exception('Failed to request linking: ${response.body}');
+    }
+  }
+
+  Future<Map<String, dynamic>> getLinkingStatus(String code) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/devices/linking/$code'),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch linking status: ${response.body}');
+    }
+  }
+
+  Future<void> approveDeviceLinking(String code, String provisioningData, String token) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/devices/linking/$code/approve?token=$token'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'provisioning_data': provisioningData,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to approve linking: ${response.body}');
     }
   }
 }

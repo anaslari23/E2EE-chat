@@ -11,8 +11,10 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./sql_app.db"
 
-    class Config:
-        case_sensitive = True
+    # Application Settings
+    PROJECT_NAME: str = "Secure Chat"
+    API_V1_STR: str = "/api/v1"
+    DEVELOPMENT_MODE: bool = True
 
 
 settings = Settings()

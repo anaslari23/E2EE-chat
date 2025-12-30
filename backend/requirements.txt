@@ -12,3 +12,4 @@ python-multipart
 pydantic-settings
 websockets
 slowapi
+firebase-admin

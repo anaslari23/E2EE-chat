@@ -4,6 +4,7 @@ import '../domain/message.dart';
 import 'providers/message_provider.dart';
 import 'providers/media_notifier.dart';
 import 'providers/call_provider.dart';
+import 'providers/presence_provider.dart';
 import 'widgets/media_bubble.dart';
 import '../../../core/providers.dart';
 
@@ -20,6 +21,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   ChatMessage? _replyingTo;
   ChatMessage? _editingMessage;
   bool _isTextEmpty = true;
+  int? _expirationDuration; // in seconds
+  DateTime? _lastTypingTime;
 
   @override
   void initState() {
@@ -27,6 +30,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _controller.addListener(() {
       setState(() => _isTextEmpty = _controller.text.trim().isEmpty);
     });
+
+    _controller.addListener(_onTextChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final contactId = int.tryParse(widget.id);
@@ -36,26 +41,46 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
+  void _onTextChanged() {
+    final now = DateTime.now();
+    if (_lastTypingTime == null || 
+        now.difference(_lastTypingTime!) > const Duration(seconds: 2)) {
+      _lastTypingTime = now;
+      final peerId = int.tryParse(widget.id);
+      final groupId = widget.id.startsWith('g') ? int.tryParse(widget.id.substring(1)) : null;
+      ref.read(presenceProvider.notifier).setTyping(true, peerId, groupId: groupId);
+      
+      Future.delayed(const Duration(seconds: 3), () {
+        if (DateTime.now().difference(_lastTypingTime!) >= const Duration(seconds: 3)) {
+          ref.read(presenceProvider.notifier).setTyping(false, peerId, groupId: groupId);
+        }
+      });
+    }
+  }
+
   void _sendMessage() {
     if (_controller.text.trim().isEmpty) return;
 
     final content = _controller.text.trim();
-    
+
     if (_editingMessage != null) {
-      ref.read(messagesProvider.notifier).editMessage(_editingMessage!.id!, content);
+      ref
+          .read(messagesProvider.notifier)
+          .editMessage(_editingMessage!.id!, content);
       _cancelAction();
       return;
     }
 
-    final newMessage = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch,
-      content: content,
-      isMe: true,
-      timestamp: DateTime.now(),
-      parentId: _replyingTo?.id,
-    );
+    if (widget.id.startsWith('g')) {
+      final groupId = int.parse(widget.id.substring(1));
+      ref.read(messagesProvider.notifier).sendGroupMessage(groupId, content, expirationDuration: _expirationDuration);
+    } else {
+      final recipientId = int.tryParse(widget.id);
+      if (recipientId != null) {
+        ref.read(messagesProvider.notifier).sendMessage(recipientId, content, expirationDuration: _expirationDuration);
+      }
+    }
 
-    ref.read(messagesProvider.notifier).addMessage(newMessage);
     _cancelAction();
   }
 
@@ -64,7 +89,55 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _replyingTo = null;
       _editingMessage = null;
       _controller.clear();
+      _expirationDuration = null; // Reset duration after send/cancel
     });
+  }
+
+  void _showTimerPicker() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text("Disappearing Messages", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            ),
+            ListTile(
+              title: const Text("Off"),
+              leading: Radio<int?>(value: null, groupValue: _expirationDuration, onChanged: (v) => _setTimer(v)),
+              onTap: () => _setTimer(null),
+            ),
+            ListTile(
+              title: const Text("5 seconds"),
+              leading: Radio<int?>(value: 5, groupValue: _expirationDuration, onChanged: (v) => _setTimer(v)),
+              onTap: () => _setTimer(5),
+            ),
+            ListTile(
+              title: const Text("1 minute"),
+              leading: Radio<int?>(value: 60, groupValue: _expirationDuration, onChanged: (v) => _setTimer(v)),
+              onTap: () => _setTimer(60),
+            ),
+            ListTile(
+              title: const Text("1 hour"),
+              leading: Radio<int?>(value: 3600, groupValue: _expirationDuration, onChanged: (v) => _setTimer(v)),
+              onTap: () => _setTimer(3600),
+            ),
+            ListTile(
+              title: const Text("1 day"),
+              leading: Radio<int?>(value: 86400, groupValue: _expirationDuration, onChanged: (v) => _setTimer(v)),
+              onTap: () => _setTimer(86400),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _setTimer(int? seconds) {
+    setState(() => _expirationDuration = seconds);
+    Navigator.pop(context);
   }
 
   @override
@@ -78,9 +151,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(30),
+              backgroundColor:
+                  Theme.of(context).colorScheme.primary.withAlpha(30),
               child: Text(
-                widget.id[0].toUpperCase(), 
+                widget.id.startsWith('g') ? 'G' : widget.id[0].toUpperCase(),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.primary,
                   fontSize: 14,
@@ -92,15 +166,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Chat ${widget.id}"),
-                Text(
-                  "Encrypted", 
-                  style: TextStyle(
-                    fontSize: 11, 
-                    color: Colors.green.shade600,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                Text(widget.id.startsWith('g') ? "Group Chat" : "Chat ${widget.id}"),
+                _buildPresenceSubtitle(),
               ],
             ),
           ],
@@ -135,6 +202,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               itemCount: messages.length,
               itemBuilder: (context, index) {
                 final message = messages[index];
+                
+                // Mark as read if it's delivered and not from me
+                if (!message.isMe && message.status == 'delivered' && message.id != null) {
+                  final senderId = int.tryParse(widget.id);
+                  if (senderId != null) {
+                    Future.microtask(() => 
+                      ref.read(messagesProvider.notifier).markAsRead(message.id!, senderId));
+                  }
+                }
+
                 final parentMessage = message.parentId != null 
                     ? messages.firstWhere((m) => m.id == message.parentId, orElse: () => message) 
                     : null;
@@ -170,6 +247,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildPresenceSubtitle() {
+    final presence = ref.watch(presenceProvider);
+    final peerId = int.tryParse(widget.id);
+    final groupId = widget.id.startsWith('g') ? int.tryParse(widget.id.substring(1)) : null;
+
+    if (groupId != null) {
+      final isTyping = presence.typingGroups[groupId] ?? false;
+      return Text(
+        isTyping ? "Someone is typing..." : "Encrypted",
+        style: TextStyle(
+          fontSize: 11,
+          color: isTyping ? const Color(0xFF2166EE) : Colors.green.shade600,
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
+
+    if (peerId != null) {
+      final isTyping = presence.typingUsers[peerId] ?? false;
+      if (isTyping) {
+        return const Text("Typing...", style: TextStyle(fontSize: 11, color: Color(0xFF2166EE), fontWeight: FontWeight.w500));
+      }
+
+      final isOnline = presence.onlineUsers[peerId] ?? false;
+      return Text(
+        isOnline ? "Online" : "Encrypted",
+        style: TextStyle(
+          fontSize: 11,
+          color: isOnline ? const Color(0xFF2166EE) : Colors.green.shade600,
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
+
+    return Text("Encrypted", style: TextStyle(fontSize: 11, color: Colors.green.shade600));
   }
 
   void _showDeleteDialog(ChatMessage message) {
@@ -253,7 +367,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 onPressed: () => ref.read(mediaProvider.notifier).pickAndSendMedia(widget.id),
               ),
             ),
-            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: _expirationDuration != null 
+                    ? const Color(0xFF2166EE).withAlpha(40) 
+                    : Colors.transparent,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: Icon(
+                  _expirationDuration != null ? Icons.timer : Icons.timer_outlined,
+                  color: _expirationDuration != null ? const Color(0xFF2166EE) : Colors.grey,
+                  size: 20,
+                ),
+                onPressed: _showTimerPicker,
+              ),
+            ),
+            const SizedBox(width: 4),
             Expanded(
               child: isRecording
                   ? _buildRecordingStatus()
@@ -392,14 +522,22 @@ class _Bubble extends StatelessWidget {
                 if (message.isMe && !message.isDeleted) ...[
                   const SizedBox(width: 4),
                   Icon(
-                    message.status == 'delivered' ? Icons.done_all : Icons.done,
+                    message.status == 'read' 
+                      ? Icons.done_all 
+                      : (message.status == 'delivered' ? Icons.done_all : Icons.done),
                     size: 12,
-                    color: message.status == 'delivered' ? const Color(0xFF2166EE) : Colors.grey,
+                    color: message.status == 'read' 
+                      ? const Color(0xFF2166EE) 
+                      : (message.status == 'delivered' ? Colors.grey : Colors.grey),
                   ),
                 ],
                 if (message.isStarred) ...[
                   const SizedBox(width: 4),
                   const Icon(Icons.star, size: 12, color: Colors.amber),
+                ],
+                if (message.expiresAt != null) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.timer_outlined, size: 10, color: Colors.grey),
                 ],
               ],
             ),

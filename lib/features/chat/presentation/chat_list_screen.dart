@@ -33,12 +33,18 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
             onSelected: (value) {
               if (value == 'logout') {
                 ref.read(authStateProvider.notifier).logout();
+              } else if (value == 'security') {
+                context.push('/security-settings');
               }
             },
             itemBuilder: (context) => [
               const PopupMenuItem(
                 value: 'profile',
                 child: Text('Profile'),
+              ),
+              const PopupMenuItem(
+                value: 'security',
+                child: Text('Privacy & Security'),
               ),
               const PopupMenuItem(
                 value: 'logout',
@@ -103,7 +109,7 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, st) => Center(child: Text('Error: $st')),
+              error: (e, st) => Center(child: Text('Error: $e')),
             ),
           ),
         ],
@@ -146,28 +152,72 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
         builder: (context, ref, _) {
           final usersAsync = ref.watch(usersProvider);
           return AlertDialog(
-            title: const Text('New Secure Chat'),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('New Secure Chat'),
+                IconButton(
+                  icon: const Icon(Icons.sync_lock, size: 20),
+                  onPressed: () => ref.refresh(syncedContactsProvider),
+                  tooltip: 'Sync Contacts',
+                ),
+              ],
+            ),
             content: SizedBox(
               width: double.maxFinite,
-              child: usersAsync.when(
-                data: (users) => ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: users.length,
-                  itemBuilder: (context, index) {
-                    final user = users[index];
-                    return ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.person)),
-                      title: Text(user['username'] ?? 'User ${user['id']}'),
-                      subtitle: Text(user['phone']),
-                      onTap: () {
-                        Navigator.pop(context);
-                        context.push('/chat/${user['id']}');
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Only contacts with a registered phone number will appear here.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFF2166EE),
+                      child: Icon(Icons.group_add, color: Colors.white),
+                    ),
+                    title: const Text('New Group', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      context.push('/group-setup');
+                    },
+                  ),
+                  const Divider(),
+                  Flexible(
+                    child: ref.watch(syncedContactsProvider).when(
+                      data: (users) {
+                        if (users.isEmpty) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text('No matching contacts found.'),
+                            ),
+                          );
+                        }
+                        return ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: users.length,
+                          itemBuilder: (context, index) {
+                            final user = users[index];
+                            return ListTile(
+                              leading: const CircleAvatar(child: Icon(Icons.person)),
+                              title: Text(user['username'] ?? 'User ${user['id']}'),
+                              subtitle: Text(user['phone']),
+                              onTap: () {
+                                Navigator.pop(context);
+                                context.push('/chat/${user['id']}');
+                              },
+                            );
+                          },
+                        );
                       },
-                    );
-                  },
-                ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, st) => Text('Error: $e'),
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (e, st) => Text('Error: $e'),
+                    ),
+                  ),
+                ],
               ),
             ),
             actions: [

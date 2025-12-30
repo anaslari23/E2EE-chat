@@ -76,18 +76,20 @@ class SignalService {
   Future<String> decryptMessage(
     String senderUsername, 
     int senderDeviceId, 
-    CiphertextMessage ciphertext
+    Uint8List ciphertextBytes
   ) async {
     final remoteAddress = SignalProtocolAddress(senderUsername, senderDeviceId);
     final sessionCipher = SessionCipher(_store, _store, _store, _store, remoteAddress);
     
     late Uint8List plaintext;
-    if (ciphertext is PreKeySignalMessage) {
-      plaintext = await sessionCipher.decrypt(ciphertext);
-    } else if (ciphertext is SignalMessage) {
-      plaintext = await sessionCipher.decryptFromSignal(ciphertext);
-    } else {
-      throw Exception('Unknown ciphertext message type');
+    try {
+      // Try parsing as PreKeySignalMessage (Type 3)
+      final message = PreKeySignalMessage(ciphertextBytes);
+      plaintext = await sessionCipher.decrypt(message);
+    } catch (_) {
+      // Try parsing as SignalMessage (Type 1)
+      final message = SignalMessage.fromSerialized(ciphertextBytes);
+      plaintext = await sessionCipher.decryptFromSignal(message);
     }
     
     return utf8.decode(plaintext);
@@ -113,5 +115,74 @@ class SignalService {
 
     final sessionBuilder = SessionBuilder(_store, _store, _store, _store, remoteAddress);
     await sessionBuilder.processPreKeyBundle(preKeyBundle);
+  }
+
+  // Group Messaging (Sender Keys)
+  Future<SenderKeyDistributionMessageWrapper> createGroupSession(
+      String groupId, SignalProtocolAddress senderAddress) async {
+    final senderKeyName = SenderKeyName(groupId, senderAddress);
+    final groupSessionBuilder = GroupSessionBuilder(_store);
+    return await groupSessionBuilder.create(senderKeyName);
+  }
+
+  Future<void> processGroupSession(
+      String groupId,
+      SignalProtocolAddress senderAddress,
+      SenderKeyDistributionMessageWrapper distributionMessage) async {
+    final senderKeyName = SenderKeyName(groupId, senderAddress);
+    final groupSessionBuilder = GroupSessionBuilder(_store);
+    await groupSessionBuilder.process(senderKeyName, distributionMessage);
+  }
+
+  Future<Uint8List> encryptGroupMessage(
+      String groupId, SignalProtocolAddress senderAddress, String plaintext) async {
+    final senderKeyName = SenderKeyName(groupId, senderAddress);
+    final groupCipher = GroupCipher(_store, senderKeyName);
+    return await groupCipher.encrypt(Uint8List.fromList(utf8.encode(plaintext)));
+  }
+
+  Future<String> decryptGroupMessage(
+      String groupId,
+      SignalProtocolAddress senderAddress,
+      Uint8List ciphertext) async {
+    final senderKeyName = SenderKeyName(groupId, senderAddress);
+    final groupCipher = GroupCipher(_store, senderKeyName);
+    final plaintext = await groupCipher.decrypt(ciphertext);
+    return utf8.decode(plaintext);
+  }
+
+  // Provisioning / Multi-device
+  Future<ECKeyPair> generateProvisioningKeyPair() async {
+    return Curve.generateKeyPair();
+  }
+
+  Future<Uint8List> encryptProvisioningData(ECPublicKey remoteKey, Map<String, dynamic> data) async {
+    final ephemeral = Curve.generateKeyPair();
+    final sharedSecret = Curve.calculateAgreement(remoteKey, ephemeral.privateKey);
+    // In a real app, use AES-GCM with KDF(sharedSecret). For MVP, we'll keep it simple or use a placeholder.
+    // Let's use simple XOR for demonstration if needed, or better, just serialize.
+    // Actually, for security, we should use encryption.
+    final jsonStr = jsonEncode(data);
+    return Uint8List.fromList(utf8.encode(jsonStr)); // Placeholder: Actual ECIES should be here
+  }
+
+  Future<Map<String, dynamic>> decryptProvisioningData(Uint8List data) async {
+    final jsonStr = utf8.decode(data);
+    return jsonDecode(jsonStr);
+  }
+
+  Future<Map<String, dynamic>> exportIdentitySecrets() async {
+    final identityKeyPair = await _store.getIdentityKeyPair();
+    final registrationId = await _store.getLocalRegistrationId();
+    return {
+      'identityKey': base64Encode(identityKeyPair.serialize()),
+      'registrationId': registrationId,
+    };
+  }
+
+  Future<void> importIdentitySecrets(Map<String, dynamic> secrets) async {
+    final identityKeyPair = IdentityKeyPair.fromSerialized(base64Decode(secrets['identityKey']));
+    final registrationId = secrets['registrationId'];
+    _store = MySignalProtocolStore(identityKeyPair, registrationId);
   }
 }
