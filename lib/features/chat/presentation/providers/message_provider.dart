@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../domain/message.dart';
-import '../../../core/providers.dart';
+import '../../domain/message.dart';
+import '../../../../core/providers.dart';
 
 class MessageNotifier extends StateNotifier<List<ChatMessage>> {
   final Ref ref;

@@ -4,37 +4,32 @@ import 'package:http/http.dart' as http;
 class ApiService {
   static const String baseUrl = 'http://localhost:8000/api/v1';
 
-  Future<Map<String, dynamic>> register(String username, String password) async {
+  Future<void> requestOtp(String phoneNumber) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/auth/register'),
+      Uri.parse('$baseUrl/auth/request-otp'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
-        'password': password,
-      }),
+      body: jsonEncode({'phone_number': phoneNumber}),
     );
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to register: ${response.body}');
+    if (response.statusCode != 200) {
+      throw Exception('Failed to request OTP: ${response.body}');
     }
   }
 
-  Future<Map<String, dynamic>> login(String username, String password) async {
+  Future<Map<String, dynamic>> verifyOtp(String phoneNumber, String code) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
+      Uri.parse('$baseUrl/auth/verify-otp'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'username': username,
-        'password': password,
+        'phone_number': phoneNumber,
+        'code': code,
       }),
     );
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to login: ${response.body}');
+      throw Exception('Failed to verify OTP: ${response.body}');
     }
   }
 

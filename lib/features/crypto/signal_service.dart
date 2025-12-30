@@ -11,18 +11,18 @@ class SignalService {
     _selfAddress = SignalProtocolAddress(username, deviceId);
     
     // In a real app, we'd load these from SecureStorage
-    final identityKeyPair = KeyHelper.generateIdentityKeyPair();
-    final registrationId = KeyHelper.generateRegistrationId(false);
+    final identityKeyPair = generateIdentityKeyPair();
+    final registrationId = generateRegistrationId(false);
     
     _store = MySignalProtocolStore(identityKeyPair, registrationId);
     
     // Generate initial pre-keys and signed pre-key
-    final preKeys = KeyHelper.generatePreKeys(0, 100);
+    final preKeys = generatePreKeys(0, 100);
     for (var key in preKeys) {
       await _store.storePreKey(key.id, key);
     }
     
-    final signedPreKey = KeyHelper.generateSignedPreKey(identityKeyPair, 0);
+    final signedPreKey = generateSignedPreKey(identityKeyPair, 0);
     await _store.storeSignedPreKey(signedPreKey.id, signedPreKey);
   }
 
@@ -63,7 +63,7 @@ class SignalService {
         await establishSession(recipientUsername, deviceId, bundle['bundle']);
       }
       
-      final sessionCipher = SessionCipher(_store, remoteAddress);
+      final sessionCipher = SessionCipher(_store, _store, _store, _store, remoteAddress);
       final message = await sessionCipher.encrypt(
         Uint8List.fromList(utf8.encode(plaintext))
       );
@@ -79,13 +79,13 @@ class SignalService {
     CiphertextMessage ciphertext
   ) async {
     final remoteAddress = SignalProtocolAddress(senderUsername, senderDeviceId);
-    final sessionCipher = SessionCipher(_store, remoteAddress);
+    final sessionCipher = SessionCipher(_store, _store, _store, _store, remoteAddress);
     
     late Uint8List plaintext;
     if (ciphertext is PreKeySignalMessage) {
-      plaintext = await sessionCipher.decryptFromPreKeySignalMessage(ciphertext);
+      plaintext = await sessionCipher.decrypt(ciphertext);
     } else if (ciphertext is SignalMessage) {
-      plaintext = await sessionCipher.decryptFromSignalMessage(ciphertext);
+      plaintext = await sessionCipher.decryptFromSignal(ciphertext);
     } else {
       throw Exception('Unknown ciphertext message type');
     }
@@ -111,7 +111,7 @@ class SignalService {
       IdentityKey(Curve.decodePoint(base64Decode(bundle['identityKey']), 0)),
     );
 
-    final sessionBuilder = SessionBuilder(_store, remoteAddress);
+    final sessionBuilder = SessionBuilder(_store, _store, _store, _store, remoteAddress);
     await sessionBuilder.processPreKeyBundle(preKeyBundle);
   }
 }

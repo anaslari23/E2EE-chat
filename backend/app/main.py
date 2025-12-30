@@ -20,10 +20,10 @@ async def startup_event():
     await init_db()
 
 
-app.include_router(auth.router, prefix=(f"{settings.API_V1_STR}/auth"), tags=["auth"])
-app.include_router(keys.router, prefix=(f"{settings.API_V1_STR}/keys"), tags=["keys"])
+app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
+app.include_router(keys.router, prefix=f"{settings.API_V1_STR}/keys", tags=["keys"])
 app.include_router(
-    messages.router, prefix=(f"{settings.API_V1_STR}/messages"), tags=["messages"]
+    messages.router, prefix=f"{settings.API_V1_STR}/messages", tags=["messages"]
 )
 app.include_router(websocket.router, tags=["websocket"])
 

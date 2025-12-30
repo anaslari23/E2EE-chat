@@ -5,8 +5,17 @@ from sqlmodel import Field, SQLModel, Relationship
 
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    username: str = Field(index=True, unique=True)
-    hashed_password: str
+    phone_number: str = Field(index=True, unique=True)
+    username: Optional[str] = Field(default=None, index=True)
+    hashed_password: Optional[str] = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class OTP(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    phone_number: str = Field(index=True)
+    code: str
+    expires_at: datetime
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     devices: list["Device"] = Relationship(back_populates="user")

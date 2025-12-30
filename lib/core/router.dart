@@ -1,6 +1,6 @@
 import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/login_screen.dart';
-import '../features/auth/presentation/register_screen.dart';
+import '../features/auth/presentation/otp_verify_screen.dart';
 import '../features/chat/presentation/chat_list_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
 
@@ -12,8 +12,8 @@ final GoRouter router = GoRouter(
       builder: (context, state) => const LoginScreen(),
     ),
     GoRoute(
-      path: '/register',
-      builder: (context, state) => const RegisterScreen(),
+      path: '/verify-otp',
+      builder: (context, state) => const OtpVerifyScreen(),
     ),
     GoRoute(
       path: '/chats',
