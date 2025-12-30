@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/message.dart';
 import 'providers/message_provider.dart';
 import 'providers/media_notifier.dart';
+import 'providers/call_provider.dart';
 import 'widgets/media_bubble.dart';
 import '../../../core/providers.dart';
 
@@ -105,8 +106,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.videocam_outlined), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.call_outlined), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.videocam_outlined), 
+            onPressed: () {
+              final peerId = int.tryParse(widget.id);
+              if (peerId != null) {
+                ref.read(callStateProvider.notifier).makeCall(peerId, CallType.video);
+              }
+            }
+          ),
+          IconButton(
+            icon: const Icon(Icons.call_outlined), 
+            onPressed: () {
+              final peerId = int.tryParse(widget.id);
+              if (peerId != null) {
+                ref.read(callStateProvider.notifier).makeCall(peerId, CallType.voice);
+              }
+            }
+          ),
           IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
         ],
       ),

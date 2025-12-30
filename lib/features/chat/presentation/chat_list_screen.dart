@@ -2,14 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'providers/chat_settings_provider.dart';
-import 'presentation/providers/message_provider.dart';
-import '../../core/providers.dart';
+import 'providers/message_provider.dart';
+import '../../auth/presentation/providers/auth_provider.dart';
 
-class ChatListScreen extends ConsumerWidget {
+class ChatListScreen extends ConsumerStatefulWidget {
   const ChatListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChatListScreen> createState() => _ChatListScreenState();
+}
+
+class _ChatListScreenState extends ConsumerState<ChatListScreen> {
+  String _selectedFilter = 'All';
+
+  @override
+  Widget build(BuildContext context) {
     final chatSettings = ref.watch(chatSettingsProvider);
     final conversationsAsync = ref.watch(conversationsProvider);
 
@@ -18,9 +25,26 @@ class ChatListScreen extends ConsumerWidget {
         title: const Text('Messages'),
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(20),
-            child: const Icon(Icons.person_outline, size: 20, color: Color(0xFF2166EE)),
+          child: PopupMenuButton<String>(
+            icon: CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primary.withAlpha(20),
+              child: const Icon(Icons.person_outline, size: 20, color: Color(0xFF2166EE)),
+            ),
+            onSelected: (value) {
+              if (value == 'logout') {
+                ref.read(authStateProvider.notifier).logout();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'profile',
+                child: Text('Profile'),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Text('Logout', style: TextStyle(color: Colors.red)),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -35,36 +59,54 @@ class ChatListScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: conversationsAsync.when(
-        data: (conversations) {
-          // Filter out archived
-          final activeConversations = conversations
-              .where((c) => !(chatSettings[c['contact_id'].toString()]?.isArchived ?? false))
-              .toList();
+      body: Column(
+        children: [
+          _buildFilterBar(),
+          Expanded(
+            child: conversationsAsync.when(
+              data: (conversations) {
+                // Filter out archived
+                final activeConversations = conversations
+                    .where((c) => !(chatSettings[c['contact_id'].toString()]?.isArchived ?? false))
+                    .where((c) {
+                      if (_selectedFilter == 'Unread') return c['unread_count'] > 0;
+                      return true;
+                    })
+                    .toList();
 
-          // Sort: Pinned first
-          activeConversations.sort((a, b) {
-            final pinA = chatSettings[a['contact_id'].toString()]?.isPinned ?? false;
-            final pinB = chatSettings[b['contact_id'].toString()]?.isPinned ?? false;
-            if (pinA && !pinB) return -1;
-            if (!pinA && pinB) return 1;
-            return 0;
-          });
+                // Sort: Pinned first
+                activeConversations.sort((a, b) {
+                  final pinA = chatSettings[a['contact_id'].toString()]?.isPinned ?? false;
+                  final pinB = chatSettings[b['contact_id'].toString()]?.isPinned ?? false;
+                  if (pinA && !pinB) return -1;
+                  if (!pinA && pinB) return 1;
+                  return 0;
+                });
 
-          if (activeConversations.isEmpty) {
-            return const Center(child: Text('No active chats yet.'));
-          }
+                if (activeConversations.isEmpty) {
+                  return Center(
+                    child: Text(
+                      _selectedFilter == 'All' 
+                        ? 'No active chats yet.' 
+                        : 'No unread messages.',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  );
+                }
 
-          return ListView.builder(
-            itemCount: activeConversations.length,
-            itemBuilder: (context, index) {
-              final conv = activeConversations[index];
-              return _ChatTile(conv: conv, index: index);
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(child: Text('Error: $e')),
+                return ListView.builder(
+                  itemCount: activeConversations.length,
+                  itemBuilder: (context, index) {
+                    final conv = activeConversations[index];
+                    return _ChatTile(conv: conv, index: index);
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, st) => Center(child: Text('Error: $st')),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showNewChatDialog(context, ref),
@@ -72,6 +114,27 @@ class ChatListScreen extends ConsumerWidget {
         icon: const Icon(Icons.add),
         backgroundColor: const Color(0xFF2166EE),
         foregroundColor: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildFilterBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          _FilterChip(
+            label: 'All', 
+            isSelected: _selectedFilter == 'All', 
+            onSelected: () => setState(() => _selectedFilter = 'All'),
+          ),
+          const SizedBox(width: 8),
+          _FilterChip(
+            label: 'Unread', 
+            isSelected: _selectedFilter == 'Unread', 
+            onSelected: () => setState(() => _selectedFilter = 'Unread'),
+          ),
+        ],
       ),
     );
   }
@@ -120,37 +183,46 @@ class ChatListScreen extends ConsumerWidget {
   }
 }
 
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onSelected;
+
+  const _FilterChip({required this.label, required this.isSelected, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onSelected,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF2166EE) : Colors.grey.withAlpha(30),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.grey.shade600,
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ChatTile extends ConsumerWidget {
   final Map<String, dynamic> conv;
   final int index;
   const _ChatTile({required this.conv, required this.index});
 
-  // The following code snippet was provided by the user.
-  // It appears to be intended for a StatefulWidget, not a ConsumerWidget (StatelessWidget).
-  // To maintain syntactic correctness as per instructions, it is commented out.
-  // If this functionality is desired, _ChatTile would need to be converted to a StatefulWidget.
-  /*
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(() {
-      setState(() => _isTextEmpty = _controller.text.trim().isEmpty);
-    });
-    
-    // Fetch history on enter
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final contactId = int.tryParse(widget.id);
-      if (contactId != null) {
-        ref.read(messagesProvider.notifier).fetchHistory(contactId);
-      }
-    });
-  }
-  */
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final chatId = conv['contact_id'].toString();
-    final settings = ref.watch(chatSettingsProvider)[chatId];
+    final settingsMap = ref.watch(chatSettingsProvider);
+    final settings = settingsMap[chatId];
     final isPinned = settings?.isPinned ?? false;
     final isMuted = settings?.isMuted ?? false;
 
@@ -167,9 +239,12 @@ class _ChatTile extends ConsumerWidget {
       ),
       title: Row(
         children: [
-          Text(
-            conv['contact_name'],
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+          Expanded(
+            child: Text(
+              conv['contact_name'],
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           if (isPinned) ...[
             const SizedBox(width: 4),
@@ -212,16 +287,21 @@ class _ChatTile extends ConsumerWidget {
   }
 
   String _formatTimestamp(String timestamp) {
-    final dt = DateTime.parse(timestamp);
-    final now = DateTime.now();
-    if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-      return '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+    try {
+      final dt = DateTime.parse(timestamp);
+      final now = DateTime.now();
+      if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+        return '${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+      }
+      return '${dt.day}/${dt.month}';
+    } catch (e) {
+      return '';
     }
-    return '${dt.day}/${dt.month}';
   }
 
   void _showChatActions(BuildContext context, WidgetRef ref, String chatId) {
-    final settings = ref.read(chatSettingsProvider)[chatId];
+    final settingsMap = ref.read(chatSettingsProvider);
+    final settings = settingsMap[chatId];
     final isPinned = settings?.isPinned ?? false;
     final isArchived = settings?.isArchived ?? false;
 

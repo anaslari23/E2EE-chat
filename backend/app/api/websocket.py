@@ -5,12 +5,10 @@ from fastapi import (
     WebSocketDisconnect,
     Depends,
     Query,
-    HTTPException,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 from app.db.session import get_session
-from app.models.models import Message, Device
+from app.models.models import Message
 from app.core.security import verify_token
 import json
 
@@ -32,7 +30,8 @@ class ConnectionManager:
 
     async def send_personal_message(self, message: str, user_id: int, device_id: int):
         if (user_id, device_id) in self.active_connections:
-            await self.active_connections[(user_id, device_id)].send_text(message)
+            ws = self.active_connections[(user_id, device_id)]
+            await ws.send_text(message)
 
     async def fan_out_message(self, message: str, recipient_id: int):
         # Send message to all devices of the recipient
@@ -70,6 +69,28 @@ async def websocket_endpoint(
                 break
 
             message_data = json.loads(data)
+
+            # Handle Signaling (WebRTC)
+            if message_data.get("type") == "signaling":
+                recipient_id = message_data.get("recipient_id")
+                recipient_device_id = message_data.get("recipient_device_id")
+                sig_data = message_data.get("data")
+
+                if recipient_id and recipient_device_id and sig_data:
+                    relay_sig = {
+                        "type": "signaling",
+                        "sender_id": user_id,
+                        "sender_device_id": device_id,
+                        "data": sig_data,
+                    }
+                    if (
+                        recipient_id,
+                        recipient_device_id,
+                    ) in manager.active_connections:
+                        await manager.send_personal_message(
+                            json.dumps(relay_sig), recipient_id, recipient_device_id
+                        )
+                continue
 
             recipient_id = message_data.get("recipient_id")
             # Map of device_id -> ciphertext

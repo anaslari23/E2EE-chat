@@ -33,6 +33,20 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> updateProfile(int userId, String username) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/update-profile?user_id=$userId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'username': username}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to update profile: ${response.body}');
+    }
+  }
+
   Future<void> uploadPreKeyBundle(int userId, int deviceId, Map<String, dynamic> bundle) async {
     final response = await http.post(
       Uri.parse('$baseUrl/keys/upload'),

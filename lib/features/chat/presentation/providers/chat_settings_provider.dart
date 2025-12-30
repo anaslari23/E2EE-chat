@@ -11,8 +11,10 @@ class ChatSettingsNotifier extends StateNotifier<Map<String, ChatConfig>> {
 
   Future<void> _loadSettings() async {
     try {
+      final userId = ref.read(authProvider);
+      if (userId == null) return;
+
       final api = ref.read(apiServiceProvider);
-      final userId = ref.read(authProvider) ?? 1;
       final settingsList = await api.getChatSettings(userId);
       
       final Map<String, ChatConfig> newMap = {};
@@ -28,8 +30,10 @@ class ChatSettingsNotifier extends StateNotifier<Map<String, ChatConfig>> {
 
   Future<void> togglePin(String chatId) async {
     try {
+      final userId = ref.read(authProvider);
+      if (userId == null) return;
+
       final api = ref.read(apiServiceProvider);
-      final userId = ref.read(authProvider) ?? 1;
       await api.togglePinChat(chatId, userId);
       
       final current = state[chatId] ?? ChatConfig(chatId: chatId, userId: userId);
@@ -44,8 +48,10 @@ class ChatSettingsNotifier extends StateNotifier<Map<String, ChatConfig>> {
 
   Future<void> toggleArchive(String chatId) async {
     try {
+      final userId = ref.read(authProvider);
+      if (userId == null) return;
+
       final api = ref.read(apiServiceProvider);
-      final userId = ref.read(authProvider) ?? 1;
       await api.toggleArchiveChat(chatId, userId);
       
       final current = state[chatId] ?? ChatConfig(chatId: chatId, userId: userId);
@@ -60,8 +66,10 @@ class ChatSettingsNotifier extends StateNotifier<Map<String, ChatConfig>> {
 
   Future<void> muteChat(String chatId, int? durationMinutes) async {
     try {
+      final userId = ref.read(authProvider);
+      if (userId == null) return;
+
       final api = ref.read(apiServiceProvider);
-      final userId = ref.read(authProvider) ?? 1;
       await api.muteChat(chatId, userId, durationMinutes);
       
       final current = state[chatId] ?? ChatConfig(chatId: chatId, userId: userId);

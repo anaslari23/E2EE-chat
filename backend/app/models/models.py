@@ -7,6 +7,7 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     phone_number: str = Field(index=True, unique=True)
     username: Optional[str] = Field(default=None, index=True)
+    is_profile_complete: bool = Field(default=False)
     hashed_password: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

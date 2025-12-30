@@ -37,6 +37,17 @@ class WebSocketService {
     }
   }
 
+  void sendSignalingMessage(int recipientId, int recipientDeviceId, Map<String, dynamic> data) {
+    if (_channel != null) {
+      _channel!.sink.add(jsonEncode({
+        'type': 'signaling',
+        'recipient_id': recipientId,
+        'recipient_device_id': recipientDeviceId,
+        'data': data,
+      }));
+    }
+  }
+
   void disconnect() {
     _channel?.sink.close();
     _channel = null;

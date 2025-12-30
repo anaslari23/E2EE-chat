@@ -104,12 +104,12 @@ async def get_conversations(
     msg_sender = Message.sender_id == user_id
     msg_recipient = Message.recipient_id == user_id
 
+    case_stmt = func.case((msg_sender, Message.recipient_id), else_=Message.sender_id)
+
     subquery = (
         select(func.max(Message.id).label("max_id"))
         .where(or_(msg_sender, msg_recipient))
-        .group_by(
-            func.case((msg_sender, Message.recipient_id), else_=Message.sender_id)
-        )
+        .group_by(case_stmt)
     )
 
     result = await db.execute(

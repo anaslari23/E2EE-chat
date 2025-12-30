@@ -2,7 +2,7 @@ import random
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from pydantic import BaseModel
@@ -30,6 +30,7 @@ class UserResponse(BaseModel):
     phone_number: str
     access_token: str
     token_type: str
+    needs_setup: bool
 
 
 @router.post("/request-otp")
@@ -102,4 +103,45 @@ async def verify_otp(
         "phone_number": user.phone_number,
         "access_token": access_token,
         "token_type": "bearer",
+        "needs_setup": not user.is_profile_complete,
+    }
+
+
+class ProfileUpdate(BaseModel):
+    username: str
+
+
+@router.post("/update-profile")
+async def update_profile(
+    profile_in: ProfileUpdate,
+    user_id: int = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    # Check if username already exists
+    exists_res = await db.execute(
+        select(User).where(User.username == profile_in.username, User.id != user_id)
+    )
+    if exists_res.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+        )
+
+    user.username = profile_in.username
+    user.is_profile_complete = True
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "is_profile_complete": user.is_profile_complete,
     }

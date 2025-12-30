@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import 'providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -13,22 +15,24 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phoneController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  String _phoneFullNumber = '';
 
   void _handleInitiateOtp() async {
     if (_formKey.currentState?.validate() ?? false) {
-      await ref.read(authStateProvider.notifier).initiateOtp(
-            _phoneController.text.trim(),
+      final notifier = ref.read(authStateProvider.notifier);
+      await notifier.initiate_otp_with_prefix(
+            _phoneFullNumber,
           );
       
+      if (!mounted) return;
+
       final authState = ref.read(authStateProvider);
       if (authState.status == AuthStatus.otpSent) {
-        if (mounted) context.push('/verify-otp');
+        context.push('/verify-otp');
       } else if (authState.status == AuthStatus.error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(authState.errorMessage ?? 'Failed to send OTP')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(authState.errorMessage ?? 'Failed to send OTP')),
+        );
       }
     }
   }
@@ -66,14 +70,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 48),
-                TextFormField(
+                IntlPhoneField(
                   controller: _phoneController,
-                  keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
-                    hintText: '+1234567890',
-                    prefixIcon: Icon(Icons.phone_outlined),
+                    labelText: 'Phone Number',
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(),
+                    ),
+                    counterText: '',
                   ),
-                  validator: (v) => v == null || v.isEmpty ? 'Enter phone number' : null,
+                  initialCountryCode: WidgetsBinding.instance.platformDispatcher.locale.countryCode ?? 'US',
+                  onChanged: (phone) {
+                    _phoneFullNumber = phone.completeNumber;
+                  },
+                  onCountryChanged: (country) {
+                    print('Country changed to: ${country.name}');
+                  },
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (v) => v == null ? 'Invalid phone number' : null,
                 ),
                 const SizedBox(height: 32),
                 ElevatedButton(

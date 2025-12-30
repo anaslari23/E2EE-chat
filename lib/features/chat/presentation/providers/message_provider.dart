@@ -80,8 +80,10 @@ class MessageNotifier extends StateNotifier<List<ChatMessage>> {
 
   Future<void> addReaction(int messageId, String emoji) async {
     try {
+      final userId = ref.read(authProvider);
+      if (userId == null) return;
+
       final api = ref.read(apiServiceProvider);
-      final userId = 1; // Mock user ID for now
       await api.reactToMessage(messageId, userId, emoji);
       
       state = [
@@ -111,8 +113,10 @@ class MessageNotifier extends StateNotifier<List<ChatMessage>> {
 
   Future<void> toggleStar(int messageId) async {
     try {
+      final userId = ref.read(authProvider);
+      if (userId == null) return;
+      
       final api = ref.read(apiServiceProvider);
-      final userId = ref.read(authProvider) ?? 1; // Fallback for now
       await api.toggleStarMessage(messageId, userId);
 
       state = [
@@ -146,8 +150,10 @@ class MessageNotifier extends StateNotifier<List<ChatMessage>> {
 
   Future<void> fetchHistory(int contactId) async {
     try {
+      final userId = ref.read(authProvider);
+      if (userId == null) return;
+
       final api = ref.read(apiServiceProvider);
-      final userId = ref.read(authProvider) ?? 1;
       final jsonList = await api.getPendingMessages(userId); // Simplified
       // In real app, we'd have a getHistory(userId, contactId)
       state = jsonList.map((j) => ChatMessage.fromJson(j, userId)).toList();
@@ -162,8 +168,10 @@ final messagesProvider = StateNotifierProvider<MessageNotifier, List<ChatMessage
 });
 
 final conversationsProvider = FutureProvider<List<dynamic>>((ref) async {
+  final userId = ref.watch(authProvider);
+  if (userId == null) return [];
+  
   final api = ref.read(apiServiceProvider);
-  final userId = ref.read(authProvider) ?? 1;
   return await api.getConversations(userId);
 });
 
@@ -173,8 +181,10 @@ final usersProvider = FutureProvider<List<dynamic>>((ref) async {
 });
 
 final starredMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {
+  final userId = ref.watch(authProvider);
+  if (userId == null) return [];
+
   final api = ref.read(apiServiceProvider);
-  final userId = ref.read(authProvider) ?? 1;
   final jsonList = await api.getStarredMessages(userId);
   return jsonList.map((j) => ChatMessage.fromJson(j, userId)).toList();
 });

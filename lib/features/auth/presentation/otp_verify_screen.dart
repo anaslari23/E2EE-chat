@@ -16,19 +16,22 @@ class _OtpVerifyScreenState extends ConsumerState<OtpVerifyScreen> {
 
   void _handleVerify() async {
     if (_formKey.currentState?.validate() ?? false) {
-      await ref.read(authStateProvider.notifier).completeVerification(
+      final notifier = ref.read(authStateProvider.notifier);
+      await notifier.completeVerification(
             _codeController.text.trim(),
           );
       
+      if (!mounted) return;
+
       final authState = ref.read(authStateProvider);
       if (authState.status == AuthStatus.authenticated) {
-        if (mounted) context.go('/chats');
+        context.go('/chats');
+      } else if (authState.status == AuthStatus.needsSetup) {
+        context.go('/profile-setup');
       } else if (authState.status == AuthStatus.error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(authState.errorMessage ?? 'Verification failed')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(authState.errorMessage ?? 'Verification failed')),
+        );
       }
     }
   }
