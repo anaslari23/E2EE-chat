@@ -8,9 +8,9 @@ class WebSocketService {
 
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
 
-  void connect(int userId) {
+  void connect(int userId, int deviceId) {
     _channel = WebSocketChannel.connect(
-      Uri.parse('ws://localhost:8000/ws/$userId'),
+      Uri.parse('ws://localhost:8000/ws/$userId/$deviceId'),
     );
 
     _channel!.stream.listen((message) {
@@ -23,11 +23,16 @@ class WebSocketService {
     });
   }
 
-  void sendMessage(int recipientId, String content) {
+  void sendMultiDeviceMessage(
+    int recipientId, 
+    Map<int, String> ciphers, 
+    {String type = 'message'}
+  ) {
     if (_channel != null) {
       _channel!.sink.add(jsonEncode({
         'recipient_id': recipientId,
-        'content': content,
+        'ciphers': ciphers.map((key, value) => MapEntry(key.toString(), value)),
+        'message_type': type,
       }));
     }
   }

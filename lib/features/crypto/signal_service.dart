@@ -48,30 +48,29 @@ class SignalService {
     };
   }
 
-  Future<CiphertextMessage> encryptMessage(
+  Future<Map<int, CiphertextMessage>> encryptMessageMultiDevice(
     String recipientUsername, 
-    int recipientDeviceId, 
-    String plaintext,
-    {Map<String, dynamic>? bundle}
+    List<Map<String, dynamic>> deviceBundles, 
+    String plaintext
   ) async {
-    final remoteAddress = SignalProtocolAddress(recipientUsername, recipientDeviceId);
+    final Map<int, CiphertextMessage> ciphers = {};
     
-    // Check if session exists
-    if (!await _store.containsSession(remoteAddress)) {
-      if (bundle != null) {
-        await establishSession(recipientUsername, recipientDeviceId, bundle);
-      } else {
-        throw Exception('No session and no bundle provided for $recipientUsername');
+    for (var bundle in deviceBundles) {
+      final deviceId = bundle['device_id'];
+      final remoteAddress = SignalProtocolAddress(recipientUsername, deviceId);
+      
+      if (!await _store.containsSession(remoteAddress)) {
+        await establishSession(recipientUsername, deviceId, bundle['bundle']);
       }
+      
+      final sessionCipher = SessionCipher(_store, remoteAddress);
+      final message = await sessionCipher.encrypt(
+        Uint8List.fromList(utf8.encode(plaintext))
+      );
+      ciphers[deviceId] = message;
     }
     
-    final sessionCipher = SessionCipher(_store, remoteAddress);
-    
-    final message = await sessionCipher.encrypt(
-      Uint8List.fromList(utf8.encode(plaintext))
-    );
-    
-    return message;
+    return ciphers;
   }
 
   Future<String> decryptMessage(

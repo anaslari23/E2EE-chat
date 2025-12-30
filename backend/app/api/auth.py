@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from app.core.limiter import limiter
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from app.db.session import get_session
@@ -14,19 +15,27 @@ class UserCreate(BaseModel):
     password: str
 
 
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
 
 
 @router.post("/register", response_model=Token)
-async def register(user_in: UserCreate, db: AsyncSession = Depends(get_session)):
+@limiter.limit("5/hour")
+async def register(
+    request: Request, user_in: UserCreate, db: AsyncSession = Depends(get_session)
+):
     result = await db.execute(select(User).where(User.username == user_in.username))
     user = result.scalar_one_or_none()
     if user:
         raise HTTPException(
             status_code=400,
-            detail="The user with this username already exists in the system.",
+            detail=("The user with this username already exists in the system."),
         )
 
     db_user = User(
@@ -42,7 +51,10 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_session))
 
 
 @router.post("/login", response_model=Token)
-async def login(user_in: UserCreate, db: AsyncSession = Depends(get_session)):
+@limiter.limit("10/minute")
+async def login(
+    request: Request, user_in: UserLogin, db: AsyncSession = Depends(get_session)
+):
     result = await db.execute(select(User).where(User.username == user_in.username))
     user = result.scalar_one_or_none()
     if not user or not verify_password(user_in.password, user.hashed_password):

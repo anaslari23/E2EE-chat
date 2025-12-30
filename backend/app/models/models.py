@@ -8,8 +8,8 @@ class User(SQLModel, table=True):
     username: str = Field(index=True, unique=True)
     hashed_password: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    prekey_bundle: Optional[str] = Field(default=None)
 
+    devices: list["Device"] = Relationship(back_populates="user")
     sent_messages: list["Message"] = Relationship(
         back_populates="sender",
         sa_relationship_kwargs={"foreign_keys": "[Message.sender_id]"},
@@ -20,11 +20,25 @@ class User(SQLModel, table=True):
     )
 
 
+class Device(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    device_id: int  # Signal registration ID or persistent device ID
+    device_name: str = Field(default="Primary Device")
+    prekey_bundle: Optional[str] = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    user: User = Relationship(back_populates="devices")
+
+
 class Message(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     sender_id: int = Field(foreign_key="user.id")
     recipient_id: int = Field(foreign_key="user.id")
-    content: str
+    recipient_device_id: int  # Targeted device ID
+    ciphertext: str  # Base64 encoded encrypted blob
+    message_type: str = Field(default="message")  # e.g., "cipher", "prekey"
+    status: str = Field(default="pending")  # pending, delivered, read
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
     sender: User = Relationship(
