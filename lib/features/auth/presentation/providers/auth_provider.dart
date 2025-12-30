@@ -62,20 +62,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> devSkip() async {
-    state = AuthState.loading();
+    // Simulate a successful login with User ID 1 for development
+    final user = AuthenticatedUser(
+      id: 1, 
+      username: 'DevUser', 
+      accessToken: 'dev_token'
+    );
+    
+    state = AuthState.authenticated(user);
+
+    // Try to initialize security but don't fail if backend is down
     try {
-      // Simulate a successful login with User ID 1 for development
-      final user = AuthenticatedUser(
-        id: 1, 
-        username: 'DevUser', 
-        accessToken: 'dev_token'
-      );
-      
       await _initializeSecurityAndConnect(user);
-      
-      state = AuthState.authenticated(user);
     } catch (e) {
-      state = AuthState.error(e.toString());
+      print('DevSkip: Security init failed (expected if backend down): $e');
     }
   }
 

@@ -3,6 +3,7 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/otp_verify_screen.dart';
 import '../features/chat/presentation/chat_list_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
+import '../features/chat/presentation/starred_messages_screen.dart';
 
 final GoRouter router = GoRouter(
   initialLocation: '/login',
@@ -25,6 +26,10 @@ final GoRouter router = GoRouter(
         final id = state.pathParameters['id']!;
         return ChatScreen(id: id);
       },
+    ),
+    GoRoute(
+      path: '/starred',
+      builder: (context, state) => const StarredMessagesScreen(),
     ),
   ],
 );

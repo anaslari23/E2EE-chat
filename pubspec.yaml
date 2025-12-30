@@ -42,6 +42,10 @@ dependencies:
   web_socket_channel: ^3.0.3
   libsignal_protocol_dart: ^0.7.4
   flutter_secure_storage: ^10.0.0
+  file_picker: ^10.3.8
+  record: ^6.1.2
+  audioplayers: ^6.5.1
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from sqlmodel import Field, SQLModel, Relationship
 
 
@@ -50,6 +50,12 @@ class Message(SQLModel, table=True):
     status: str = Field(default="pending")  # pending, delivered, read
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
+    # Phase 12 Additions
+    parent_id: Optional[int] = Field(default=None, foreign_key="message.id")
+    is_edited: bool = Field(default=False)
+    is_deleted: bool = Field(default=False)
+    deleted_for_all: bool = Field(default=False)
+
     sender: User = Relationship(
         back_populates="sent_messages",
         sa_relationship_kwargs={"foreign_keys": "[Message.sender_id]"},
@@ -58,3 +64,46 @@ class Message(SQLModel, table=True):
         back_populates="received_messages",
         sa_relationship_kwargs={"foreign_keys": "[Message.recipient_id]"},
     )
+
+    reactions: List["Reaction"] = Relationship(back_populates="message")
+    attachments: List["Attachment"] = Relationship(back_populates="message")
+
+
+class Attachment(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    message_id: int = Field(foreign_key="message.id")
+    file_path: str
+    file_type: str  # image, video, voice, document
+    file_size: int
+    is_view_once: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    message: Message = Relationship(back_populates="attachments")
+
+
+class Reaction(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    message_id: int = Field(foreign_key="message.id")
+    user_id: int = Field(foreign_key="user.id")
+    emoji: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    message: Message = Relationship(back_populates="reactions")
+
+
+class StarredMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    message_id: int = Field(foreign_key="message.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ChatSettings(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    chat_id: str  # Can be user_id for 1:1 or group_id
+    is_pinned: bool = Field(default=False)
+    is_archived: bool = Field(default=False)
+    mute_until: Optional[datetime] = Field(default=None)
+    category: str = Field(default="personal")  # personal, unread, etc.
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

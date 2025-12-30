@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api import auth, websocket, keys, messages
+from app.api import auth, websocket, keys, messages, media, chats
 from app.db.session import init_db
 from app.core.config import settings
 
@@ -25,9 +25,6 @@ app.include_router(keys.router, prefix=f"{settings.API_V1_STR}/keys", tags=["key
 app.include_router(
     messages.router, prefix=f"{settings.API_V1_STR}/messages", tags=["messages"]
 )
+app.include_router(media.router, prefix=f"{settings.API_V1_STR}/media", tags=["media"])
+app.include_router(chats.router, prefix=f"{settings.API_V1_STR}/chats", tags=["chats"])
 app.include_router(websocket.router, tags=["websocket"])
-
-
-@app.get("/")
-async def root():
-    return {"message": "Welcome to the Secure Chat API"}

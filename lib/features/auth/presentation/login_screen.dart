@@ -90,11 +90,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: isLoading ? null : () async {
-                    await ref.read(authStateProvider.notifier).devSkip();
-                    if (mounted && ref.read(authStateProvider).status == AuthStatus.authenticated) {
-                      context.go('/chats');
-                    }
+                  onPressed: () {
+                    ref.read(authStateProvider.notifier).devSkip();
+                    context.go('/chats');
                   },
                   child: const Text(
                     'Skip Login (Dev Only)',
