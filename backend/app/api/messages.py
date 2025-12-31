@@ -53,6 +53,59 @@ async def get_pending_messages(device_id: int, db: AsyncSession = Depends(get_se
     return response
 
 
+@router.get("/history")
+async def get_message_history(
+    user_id: int = Query(...),
+    contact_id: int = Query(...),
+    limit: int = Query(50),
+    db: AsyncSession = Depends(get_session),
+):
+    """Get message history between two users."""
+    from sqlalchemy import or_, and_
+
+    from sqlalchemy.orm import selectinload
+
+    result = await db.execute(
+        select(Message)
+        .where(
+            or_(
+                and_(Message.sender_id == user_id, Message.recipient_id == contact_id),
+                and_(Message.sender_id == contact_id, Message.recipient_id == user_id),
+            ),
+            Message.group_id.is_(None),
+        )
+        .options(selectinload(Message.reactions))
+        .order_by(Message.timestamp.desc())
+        .limit(limit)
+    )
+    messages = result.scalars().all()
+
+    response = []
+    for msg in messages:
+        reactions_data = [
+            {"user_id": r.user_id, "emoji": r.emoji} for r in msg.reactions
+        ]
+        response.append(
+            {
+                "message_id": msg.id,
+                "sender_id": msg.sender_id,
+                "recipient_id": msg.recipient_id,
+                "ciphertext": msg.ciphertext,
+                "message_type": msg.message_type,
+                "timestamp": msg.timestamp.isoformat(),
+                "status": msg.status,
+                "parent_id": msg.parent_id,
+                "is_edited": msg.is_edited,
+                "is_deleted": msg.is_deleted,
+                "deleted_for_all": msg.deleted_for_all,
+                "reactions": reactions_data,
+            }
+        )
+
+    # Return in chronological order (oldest first)
+    return list(reversed(response))
+
+
 @router.post("/{message_id}/edit")
 async def edit_message(
     message_id: int, edit_in: MessageEdit, db: AsyncSession = Depends(get_session)

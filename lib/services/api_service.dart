@@ -99,6 +99,18 @@ class ApiService {
     }
   }
 
+  Future<List<dynamic>> getMessageHistory(int userId, int contactId, {int limit = 50}) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/messages/history?user_id=$userId&contact_id=$contactId&limit=$limit'),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch message history: ${response.body}');
+    }
+  }
+
   Future<void> editMessage(int messageId, String ciphertext) async {
     final response = await http.post(
       Uri.parse('$baseUrl/messages/$messageId/edit'),
@@ -250,9 +262,9 @@ class ApiService {
     }
   }
 
-  Future<List<dynamic>> getUsers() async {
+  Future<List<dynamic>> getUsers(int userId) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/chats/users'),
+      Uri.parse('$baseUrl/chats/users?user_id=$userId'),
     );
 
     if (response.statusCode == 200) {

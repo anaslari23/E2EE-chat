@@ -197,6 +197,43 @@ class _ChatListScreenState extends ConsumerState<ChatListScreen> {
                     },
                   ),
                   const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Enter phone number (e.g., 2222222222)',
+                        prefixIcon: const Icon(Icons.phone),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      maxLength: 10,
+                      onSubmitted: (phoneNumber) async {
+                        if (phoneNumber.isEmpty) return;
+                        
+                        // Find user by phone number
+                        final users = await ref.read(usersProvider.future);
+                        final matchingUser = users.firstWhere(
+                          (u) => u['phone'] == phoneNumber,
+                          orElse: () => {},
+                        );
+                        
+                        if (matchingUser.isNotEmpty && context.mounted) {
+                          Navigator.pop(context);
+                          context.push('/chat/${matchingUser['id']}');
+                        } else if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('No user found with phone: $phoneNumber'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  const Divider(),
                   Flexible(
                     child: ref.watch(syncedContactsProvider).when(
                       data: (users) {

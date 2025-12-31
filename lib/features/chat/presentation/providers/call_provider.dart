@@ -1,7 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_callkit_incoming/entities/entities.dart';
+import 'package:uuid/uuid.dart';
 import '../providers/message_provider.dart';
 import '../../../../core/providers.dart';
+import '../../../../services/callkit_service.dart';
 import 'dart:async';
 
 enum CallType { voice, video }
@@ -15,6 +19,7 @@ class CallState {
   final RTCVideoRenderer? remoteRenderer;
   final String? remoteSdp;
   final String? errorMessage;
+  final String? callUuid;
 
   CallState({
     this.status = CallStatus.idle,
@@ -24,6 +29,7 @@ class CallState {
     this.remoteRenderer,
     this.remoteSdp,
     this.errorMessage,
+    this.callUuid,
   });
 
   CallState copyWith({
@@ -34,6 +40,7 @@ class CallState {
     RTCVideoRenderer? remoteRenderer,
     String? remoteSdp,
     String? errorMessage,
+    String? callUuid,
   }) {
     return CallState(
       status: status ?? this.status,
@@ -43,6 +50,7 @@ class CallState {
       remoteRenderer: remoteRenderer ?? this.remoteRenderer,
       remoteSdp: remoteSdp ?? this.remoteSdp,
       errorMessage: errorMessage ?? this.errorMessage,
+      callUuid: callUuid ?? this.callUuid,
     );
   }
 }
@@ -51,6 +59,9 @@ class CallNotifier extends StateNotifier<CallState> {
   final Ref ref;
   RTCPeerConnection? _peerConnection;
   MediaStream? _localStream;
+  final CallKitService _callKitService = CallKitService();
+  final Uuid _uuid = const Uuid();
+  StreamSubscription? _callKitSubscription;
   
   // ICE Server configuration (Public STUN servers)
   final Map<String, dynamic> _iceConfig = {
@@ -62,7 +73,23 @@ class CallNotifier extends StateNotifier<CallState> {
 
   CallNotifier(this.ref) : super(CallState()) {
     _listenToSignaling();
+    _listenToCallKitEvents();
   }
+
+  void _listenToCallKitEvents() {
+    _callKitSubscription = FlutterCallkitIncoming.onEvent.listen((event) async {
+      if (event == null) return;
+      
+      if (event.event == Event.actionCallAccept) {
+        await acceptCall();
+      } else if (event.event == Event.actionCallDecline) {
+        rejectCall();
+      } else if (event.event == Event.actionCallEnded) {
+        endCall();
+      }
+    });
+  }
+
 
   void _listenToSignaling() {
     final ws = ref.read(webSocketServiceProvider);
@@ -89,7 +116,22 @@ class CallNotifier extends StateNotifier<CallState> {
   }
 
   Future<void> makeCall(int peerId, CallType type) async {
-    state = state.copyWith(status: CallStatus.outgoing, peerId: peerId, type: type);
+    final callUuid = _uuid.v4();
+    
+    state = state.copyWith(
+      status: CallStatus.outgoing, 
+      peerId: peerId, 
+      type: type,
+      callUuid: callUuid,
+    );
+
+    // Show native outgoing call UI
+    await _callKitService.startCall(
+      uuid: callUuid,
+      name: 'User $peerId',
+      handle: peerId.toString(),
+      hasVideo: type == CallType.video,
+    );
     
     try {
       await _initializeRenderers();
@@ -132,9 +174,13 @@ class CallNotifier extends StateNotifier<CallState> {
       
     } catch (e) {
       state = state.copyWith(status: CallStatus.idle, errorMessage: e.toString());
+      if (state.callUuid != null) {
+        await _callKitService.endCall(state.callUuid!);
+      }
       _cleanup();
     }
   }
+
 
   Future<void> _handleOffer(int senderId, Map<String, dynamic> sig) async {
     if (state.status != CallStatus.idle) {
@@ -144,14 +190,26 @@ class CallNotifier extends StateNotifier<CallState> {
     
     final callType = sig['callType'] == CallType.video.toString() 
         ? CallType.video : CallType.voice;
+    
+    final callUuid = _uuid.v4();
         
     state = state.copyWith(
       status: CallStatus.ringing, 
       peerId: senderId, 
       type: callType,
       remoteSdp: sig['sdp'],
+      callUuid: callUuid,
+    );
+
+    // Show native incoming call UI
+    await _callKitService.showIncomingCall(
+      uuid: callUuid,
+      name: 'User $senderId',
+      handle: senderId.toString(),
+      hasVideo: callType == CallType.video,
     );
   }
+
 
   Future<void> acceptCall() async {
     if (state.status != CallStatus.ringing || state.peerId == null || state.remoteSdp == null) return;
@@ -255,6 +313,9 @@ class CallNotifier extends StateNotifier<CallState> {
     if (state.peerId != null) {
       _sendSignaling(state.peerId!, {'type': 'reject'});
     }
+    if (state.callUuid != null) {
+      _callKitService.endCall(state.callUuid!);
+    }
     _cleanup();
     state = CallState();
   }
@@ -262,6 +323,9 @@ class CallNotifier extends StateNotifier<CallState> {
   void endCall() {
     if (state.peerId != null) {
       _sendSignaling(state.peerId!, {'type': 'end'});
+    }
+    if (state.callUuid != null) {
+      _callKitService.endCall(state.callUuid!);
     }
     _cleanup();
     state = CallState();
@@ -282,6 +346,13 @@ class CallNotifier extends StateNotifier<CallState> {
     state.remoteRenderer?.dispose();
     _peerConnection = null;
     _localStream = null;
+  }
+
+  @override
+  void dispose() {
+    _callKitSubscription?.cancel();
+    _cleanup();
+    super.dispose();
   }
 }
 

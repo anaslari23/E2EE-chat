@@ -54,7 +54,9 @@ dependencies:
   crypto: ^3.0.3
   firebase_core: ^3.1.0
   firebase_messaging: ^15.0.0
-  flutter_local_notifications: ^16.3.2
+  flutter_local_notifications: ^18.0.0
+  flutter_callkit_incoming: ^2.0.4
+  uuid: ^4.2.2
   cryptography: ^2.9.0
   photo_view: ^0.15.0
   video_player: ^2.10.1

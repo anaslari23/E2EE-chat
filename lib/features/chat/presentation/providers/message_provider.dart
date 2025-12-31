@@ -315,7 +315,7 @@ class MessageNotifier extends StateNotifier<List<ChatMessage>> {
           final distMsg = await signal.createGroupSession(
               groupId.toString(), selfAddress);
           
-          final users = await api.getUsers(); // Simplified: need devices
+          final users = await api.getUsers(selfId); // Simplified: need devices
           // For MVP, assume primary device 1
           final targetBundle = await api.getPreKeyBundle(mId, 1);
           
@@ -559,10 +559,8 @@ class MessageNotifier extends StateNotifier<List<ChatMessage>> {
       if (userId == null) return;
 
       final api = ref.read(apiServiceProvider);
-      // Fetch recent messages for a newly linked device
-      // In a real app this would be more complex (paging/decryption)
-      // For MVP we just sync pending messages which acts as history for new devices if queued
-      final jsonList = await api.getPendingMessages(userId); 
+      // Fetch message history between current user and contact
+      final jsonList = await api.getMessageHistory(userId, contactId); 
       
       final newMessages = jsonList.map((j) => ChatMessage.fromJson(j, userId)).toList();
       
@@ -594,8 +592,11 @@ final conversationsProvider = FutureProvider<List<dynamic>>((ref) async {
 });
 
 final usersProvider = FutureProvider<List<dynamic>>((ref) async {
+  final userId = ref.watch(authProvider);
+  if (userId == null) return [];
+  
   final api = ref.read(apiServiceProvider);
-  return await api.getUsers();
+  return await api.getUsers(userId);
 });
 
 final starredMessagesProvider = FutureProvider<List<ChatMessage>>((ref) async {

@@ -197,8 +197,9 @@ async def sync_contacts(
 
 
 @router.get("/users")
-async def get_users(db: AsyncSession = Depends(get_session)):
-    result = await db.execute(select(User))
+async def get_users(user_id: int = Query(...), db: AsyncSession = Depends(get_session)):
+    """Get list of all users except the requesting user."""
+    result = await db.execute(select(User).where(User.id != user_id))
     users = result.scalars().all()
     return [
         {"id": u.id, "username": u.username, "phone": u.phone_number} for u in users
