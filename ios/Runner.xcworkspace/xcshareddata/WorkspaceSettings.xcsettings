@@ -2,7 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>PreviewsEnabled</key>
-	<false/>
+	<key>BuildLocationStyle</key>
+	<string>UseAppPreferences</string>
+	<key>CustomBuildLocationType</key>
+	<string>RelativeToWorkspace</string>
+	<key>DerivedDataCustomLocation</key>
+	<string>DerivedData</string>
+	<key>DerivedDataLocationStyle</key>
+	<string>WorkspaceRelativePath</string>
+	<key>IssueFilterStyle</key>
+	<string>ShowActiveSchemeOnly</string>
+	<key>LiveSourceAnalysisEnabled</key>
+	<true/>
 </dict>
 </plist>

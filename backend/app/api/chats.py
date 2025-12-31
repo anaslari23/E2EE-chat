@@ -108,7 +108,7 @@ async def get_conversations(
     msg_sender = Message.sender_id == user_id
     msg_recipient = Message.recipient_id == user_id
 
-    case_stmt = case([(msg_sender, Message.recipient_id)], else_=Message.sender_id)
+    case_stmt = case((msg_sender, Message.recipient_id), else_=Message.sender_id)
 
     subquery = (
         select(func.max(Message.id).label("max_id"))
